@@ -12,6 +12,17 @@ Heimdall is an open source eBPF-powered security framework that dynamically enfo
 ## Prerequisites
 
 ## Usage
+To build the project run:
+```bash
+make all
+```
+
+
+This is will give an executable file called `syscall_blocker`
+```bash
+sudo ./syscall_blocker --help
+```
+
 
 ## Installation
 
