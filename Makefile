@@ -1,5 +1,6 @@
 # Paths and variables
 BPFOBJ = pkg/syscallfilter/syscallfilter_x86_bpfel.o
+BPFOBJ_GO = pkg/syscallfilter/syscallfilter_x86_bpfel.go
 VMLINUX = vmlinux.h
 EBPF_DIR = src
 GO_CLI_DIR = .
@@ -22,7 +23,7 @@ build-cli:
 
 # Clean generated files
 clean:
-	rm -f $(EBPF_DIR)/$(VMLINUX) $(BPFOBJ) $(CLI_BINARY)
+	rm -f $(EBPF_DIR)/$(VMLINUX) $(BPFOBJ) $(BPFOBJ_GO) $(CLI_BINARY)
 
 # Clean and rebuild everything
 rebuild: clean all

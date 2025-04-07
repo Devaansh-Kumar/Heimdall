@@ -18,40 +18,43 @@ import (
 
 const KPROBE_SYSCALL_HOOKPOINT = "x64_sys_call"
 
-func BlockSystemCall(syscall_nr uint32, cgroupID uint64) {
-    // Remove resource limits for kernels <5.11.
-    if err := rlimit.RemoveMemlock(); err != nil { 
-        log.Fatal("Removing memlock:", err)
-    }
+func BlockSystemCall(sysCallList []uint32, cgroupID uint64) {
+	// Remove resource limits for kernels <5.11.
+	if err := rlimit.RemoveMemlock(); err != nil {
+		log.Fatal("Removing memlock:", err)
+	}
 
-    // Load the compiled eBPF ELF and load it into the kernel.
-    var objs syscallfilterObjects
-    if err := loadSyscallfilterObjects(&objs, nil); err != nil {
-        log.Fatal("Loading eBPF objects:", err)
-    }
-    defer objs.Close() 
+	// Load the compiled eBPF ELF and load it into the kernel.
+	var objs syscallfilterObjects
+	if err := loadSyscallfilterObjects(&objs, nil); err != nil {
+		log.Fatal("Loading eBPF objects:", err)
+	}
+	defer objs.Close()
 
-    // Attach ebpf program to kprobe.
-    kp, err := link.Kprobe(KPROBE_SYSCALL_HOOKPOINT, objs.SysCallBlock, nil)
-    if err != nil {
-        log.Fatal("Attaching to kprobe:", err)
-    }
-    defer kp.Close() 
+	// Attach ebpf program to kprobe.
+	kp, err := link.Kprobe(KPROBE_SYSCALL_HOOKPOINT, objs.SysCallBlock, nil)
+	if err != nil {
+		log.Fatal("Attaching to kprobe:", err)
+	}
+	defer kp.Close()
 
 	log.Println("Waiting for events..")
 
-	// Put filter in map
-	err = objs.FilterMap.Put(syscall_nr, syscallfilterFilterRule{
-		// Uid: uid,
-		// MntNsId: mntNsID,
-		CgroupId: cgroupID,
-	})
-	if err != nil {
-		log.Fatal("unable to update map: ", err)
+	// Create filter and put in map
+	for _, syscall_nr := range sysCallList {
+		key := syscallfilterSyscallFilterKey{
+			SyscallNr: syscall_nr,
+			CgroupId:  cgroupID,
+		}
+		err = objs.FilterMap.Put(key, syscallfilterFilterRule{
+			Pad: 1,
+		})
+		if err != nil {
+			log.Fatal("unable to update map: ", err)
+		}
+		syscall_name, _ := x64.GetSyscallName(int(syscall_nr))
+		log.Printf("Successfully added filter: Syscall=%s (Nr=%d), CgroupID=%d\n", syscall_name, syscall_nr, cgroupID)
 	}
-
-	syscall_name, _ := x64.GetSyscallName(int(syscall_nr))
-	log.Printf("Successfully added filter: Syscall=%s (Nr=%d), CgroupID=%d\n", syscall_name, syscall_nr, cgroupID)
 
 	// Create new reader to read from perf buffer
 	rd, err := perf.NewReader(objs.Events, os.Getpagesize())
@@ -84,7 +87,7 @@ func readPerfEvents(rd *perf.Reader) {
 			continue
 		}
 
-		log.Printf("Killed process. PID: %v, UID: %v, MntID: %v, CgroupID: %v, Syscall: %v, Command: %s", event.Pid, event.Uid, event.MntNsId, event.CgroupId, event.SyscallNr, unix.ByteSliceToString(event.Comm[:]))
+		log.Printf("Killed process. PID: %v, UID: %v, CgroupID: %v, Syscall: %v, Command: %s", event.Pid, event.Uid, event.CgroupId, event.SyscallNr, unix.ByteSliceToString(event.Comm[:]))
 	}
 }
 
