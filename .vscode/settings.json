@@ -2,6 +2,10 @@
     "files.associations": {
         "bpf_core_read.h": "c",
         "vmlinux.h": "c",
-        "errno.h": "c"
+        "errno.h": "c",
+        "common.h": "c",
+        "sched.h": "c",
+        "types.h": "c",
+        "capability.h": "c"
     }
 }

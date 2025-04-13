@@ -2,27 +2,23 @@ package syscallfilter
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"log"
 	"os"
-	"os/signal"
-	"syscall"
+	"sync"
 
 	"github.com/Devaansh-Kumar/Heimdall/pkg/x64"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/perf"
-	"github.com/cilium/ebpf/rlimit"
 	"golang.org/x/sys/unix"
 )
 
 const KPROBE_SYSCALL_HOOKPOINT = "x64_sys_call"
 
-func BlockSystemCall(sysCallList []uint32, cgroupID uint64) {
-	// Remove resource limits for kernels <5.11.
-	if err := rlimit.RemoveMemlock(); err != nil {
-		log.Fatal("Removing memlock:", err)
-	}
+func BlockSystemCall(ctx context.Context, wg *sync.WaitGroup, sysCallList []uint32, cgroupID uint64) {
+	defer wg.Done()
 
 	// Load the compiled eBPF ELF and load it into the kernel.
 	var objs syscallfilterObjects
@@ -38,8 +34,6 @@ func BlockSystemCall(sysCallList []uint32, cgroupID uint64) {
 	}
 	defer kp.Close()
 
-	log.Println("Waiting for events..")
-
 	// Create filter and put in map
 	for _, syscall_nr := range sysCallList {
 		key := syscallfilterSyscallFilterKey{
@@ -51,13 +45,14 @@ func BlockSystemCall(sysCallList []uint32, cgroupID uint64) {
 		})
 		if err != nil {
 			log.Fatal("unable to update map: ", err)
+		} else {
+			syscall_name, _ := x64.GetSyscallName(int(syscall_nr))
+			log.Printf("Successfully added filter: Syscall=%s (Nr=%d), CgroupID=%d\n", syscall_name, syscall_nr, cgroupID)
 		}
-		syscall_name, _ := x64.GetSyscallName(int(syscall_nr))
-		log.Printf("Successfully added filter: Syscall=%s (Nr=%d), CgroupID=%d\n", syscall_name, syscall_nr, cgroupID)
 	}
 
 	// Create new reader to read from perf buffer
-	rd, err := perf.NewReader(objs.Events, os.Getpagesize())
+	rd, err := perf.NewReader(objs.SyscallEvents, os.Getpagesize())
 	if err != nil {
 		log.Fatalf("creating perf event reader: %s", err)
 	}
@@ -66,7 +61,8 @@ func BlockSystemCall(sysCallList []uint32, cgroupID uint64) {
 	// Outputting process details when system call is blocked
 	go readPerfEvents(rd)
 
-	waitForExit(rd)
+	<-ctx.Done()
+	log.Println("Shutting down syscall blocker...")
 }
 
 func readPerfEvents(rd *perf.Reader) {
@@ -88,17 +84,5 @@ func readPerfEvents(rd *perf.Reader) {
 		}
 
 		log.Printf("Killed process. PID: %v, UID: %v, CgroupID: %v, Syscall: %v, Command: %s", event.Pid, event.Uid, event.CgroupId, event.SyscallNr, unix.ByteSliceToString(event.Comm[:]))
-	}
-}
-
-func waitForExit(rd *perf.Reader) {
-	stopper := make(chan os.Signal, 1)
-	signal.Notify(stopper, os.Interrupt, syscall.SIGTERM)
-
-	<-stopper
-	log.Println("Received signal, exiting program..")
-
-	if err := rd.Close(); err != nil {
-		log.Fatalf("closing perf event reader: %s", err)
 	}
 }
