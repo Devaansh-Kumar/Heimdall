@@ -80,6 +80,6 @@ func readPerfEvents(rd *perf.Reader) {
 			continue
 		}
 
-		log.Printf("Blocked privilege escation in container. PID: %v, UID: %v, CgroupID: %v, Syscall: %v, Command: %s", event.Pid, event.Uid, event.CgroupId, event.SyscallNr, unix.ByteSliceToString(event.Comm[:]))
+		log.Printf("Blocked privilege escalation in container. PID: %v, UID: %v, CgroupID: %v, Syscall: %v, Command: %s", event.Pid, event.Uid, event.CgroupId, event.SyscallNr, unix.ByteSliceToString(event.Comm[:]))
 	}
 }
