@@ -13,6 +13,7 @@ import (
 	"github.com/Devaansh-Kumar/Heimdall/pkg/privilege"
 	"github.com/Devaansh-Kumar/Heimdall/pkg/syscallfilter"
 	"github.com/Devaansh-Kumar/Heimdall/pkg/x64"
+	"github.com/Devaansh-Kumar/Heimdall/pkg/fileaccess"
 	"github.com/cilium/ebpf/rlimit"
 	"github.com/spf13/cobra"
 )
@@ -26,6 +27,7 @@ var rootCmd = &cobra.Command{
 		containerID, _ := cmd.Flags().GetString("container-id")
 		syscalls, _ := cmd.Flags().GetStringSlice("block-syscalls")
 		privEscalation, _ := cmd.Flags().GetBool("block-privilege-escalation")
+		filePath, _ := cmd.Flags().GetString("file-path")
 
 		// Get cgroup id from container name
 		cgroupID, err := cgroup.GetCgroupID(containerID)
@@ -74,6 +76,12 @@ var rootCmd = &cobra.Command{
 			started = true
 		}
 
+		if len(filePath) > 0 {
+			wg.Add(1)
+			go fileaccess.BlockFileOpen(ctx, &wg, cgroupID, filePath)
+			started = true
+		}
+
 		if started {
 			<-ctx.Done() // Wait until termination signal is received
 			wg.Wait()    // Wait for background tasks to finish
@@ -89,6 +97,8 @@ func Execute() {
 	rootCmd.Flags().StringP("container-id", "c", "", "Long Container ID")
 	rootCmd.Flags().StringSliceP("block-syscalls", "s", []string{}, "List of system calls to block")
 	rootCmd.Flags().BoolP("block-privilege-escalation", "p", false, "Block Privilege Escalation attempts for the container")
+	rootCmd.Flags().StringP("file-path", "f", "", "File path to block")
+
 
 	// Remove resource limits for kernels <5.11.
 	if err := rlimit.RemoveMemlock(); err != nil {
