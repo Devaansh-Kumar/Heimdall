@@ -1,14 +1,15 @@
 package fileaccess
 
 import (
+	"context"
+	"fmt"
 	"log"
 	"os"
 	"sync"
-	"context"
+
 	// "errors"
 	// "encoding/binary"
 	// "bytes"
-	
 
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/perf"
@@ -17,7 +18,7 @@ import (
 
 const LSM_BPF_HOOKPOINT = "file_open"
 
-func BlockFileOpen(ctx context.Context, wg *sync.WaitGroup, cgroupID uint64, filePath string) {
+func BlockFileOpen(ctx context.Context, wg *sync.WaitGroup, cgroupID uint64, filePath []string) {
 	defer wg.Done()
 
 
@@ -37,19 +38,24 @@ func BlockFileOpen(ctx context.Context, wg *sync.WaitGroup, cgroupID uint64, fil
 	defer kp.Close()
 
 	// Create filter and put in map
-	key := uint32(0)
-
 	var val fileaccessFilePath
-	for i := 0; i < len(filePath); i++ {
-		val.Path[i] = int8(filePath[i])
+	entries := len(filePath)
+	for i := 0; i < entries; i++ {
+		for j := 0; j < len(filePath[i]); j++ {
+			// fmt.Printf("%c ", filePath[i][j])
+			val.Path[j] = int8(filePath[i][j])
+		}
+		fmt.Printf("\n")
+		val.CgroupId = cgroupID
+		err = objs.BlockedFiles.Put(int32(i), val)
+		if err != nil {
+			log.Fatal("Could not put in map: ", err)
+		} else {
+			log.Printf("Added %s to Blocked File Paths", filePath[i])
+		}
+		val = fileaccessFilePath{}
 	}
-	val.CgroupId = cgroupID
-	err = objs.BlockedFiles.Put(key, val)
-	if err != nil {
-		log.Fatal("Could not put in map: ", err)
-	} else {
-		log.Printf("Added %s to Blocked File Paths", filePath)
-	}
+	
 
 	// Create new reader to read from perf buffer
 	rd, err := perf.NewReader(objs.FileAccessEvents, os.Getpagesize())
