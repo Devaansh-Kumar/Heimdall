@@ -6,7 +6,7 @@
 #define BUF_SIZE 32768
 #define MAX_COMBINED_LEN 512
 #define MAX_BUFS 2
-// #define MAX_BLOCKED_FILES 1
+#define MAX_BLOCKED_FILES 2
 
 // #define DEBUG
 // #define HASH_COMP
@@ -75,8 +75,11 @@ static __always_inline char *prepend_path(const struct path *path, struct buffer
 	struct mount *m;
 	struct qstr d_name;
 
+	// int i = 0;
+	
 #pragma unroll
 	for (int i = 0; i < 20; i++)
+	// bpf_for(i, 0, 20)
 	{
 		parent = BPF_CORE_READ(dentry, d_parent);
 		mnt_root = BPF_CORE_READ(vfsmnt, mnt_root);
@@ -131,6 +134,7 @@ static __inline bool my_substr(const char *path, const char *prefix)
 
 #pragma unroll
 	for (i = 0; i < MAX_COMBINED_LEN; i++)
+	// bpf_for(i, 0, MAX_COMBINED_LEN)
 	{ // Cap at 256 to stay within BPF limits
 		char p = path[i];
 		char b = prefix[i];
@@ -193,6 +197,46 @@ static __always_inline bool compare_file_names(const char *s1, const char *s2)
 // 	return 0;
 // }
 
+struct cont {
+	long ret;
+	const char *cur_file;
+};
+
+static long callback_fn(struct bpf_map *map, const void *key, struct filePath* blocked_file, struct cont* ctx) {
+	
+	if (!blocked_file){
+		bpf_printk("Not found");
+		// ctx->ret = 0;
+		return 0;
+	}
+	
+	unsigned long long cgroup_id_recv = blocked_file->cgroup_id;
+	if(cgroup_id_recv == 0){
+		// ctx->ret = 0;
+		return 0;
+	}
+	
+	unsigned long long cgroupid_curr = bpf_get_current_cgroup_id();
+	
+	if(cgroup_id_recv == cgroupid_curr){
+		bpf_printk("cgroup: %lu\n", blocked_file->cgroup_id);
+		bpf_printk("path: %s\n", blocked_file->path);
+		bpf_printk("current path: %s\n", ctx->cur_file);
+		const char *blocked_file_path = blocked_file->path;
+
+		if (blocked_file_path == NULL){
+			bpf_printk("Blocked file path is NULL");
+			// ctx->ret = 0;
+			return 0;
+		}
+		if (compare_file_names(ctx->cur_file, blocked_file_path)){
+			bpf_printk("BLOCKED");
+			ctx->ret = -EPERM;
+		}
+	}
+	return 0;
+}
+
 SEC("lsm/file_open")
 int BPF_PROG(restrict_file_open, struct file *file)
 {
@@ -211,41 +255,43 @@ int BPF_PROG(restrict_file_open, struct file *file)
 	const char *cur_file = prepend_path(&path, buf);
 
 	u32 index = 0;
-	
-	unsigned long long cgroupid_curr = bpf_get_current_cgroup_id();
 
 	struct filePath *blocked_file;
 
-	const int MAX_BLOCKED_FILES = 1;
-
-	if(MAX_BLOCKED_FILES > 0 && MAX_BLOCKED_FILES <= 1) {
 		// #pragma clang loop unroll(full)
-		for(index = 0; index < MAX_BLOCKED_FILES; index++){
-			blocked_file = bpf_map_lookup_elem(&blocked_files, &index);
+		// for(index = 0; index < MAX_BLOCKED_FILES; index++){
+
+		struct cont c = {
+			.cur_file = cur_file,
+		};
+		bpf_for_each_map_elem(&blocked_files, callback_fn, &c, 0);
+		if (c.ret != 0) ret = c.ret;
+
+			// blocked_file = bpf_map_lookup_elem(&blocked_files, &index);
 	
-			if (!blocked_file){
-				bpf_printk("Not found");
-				continue;
-			}
+			// if (!blocked_file){
+			// 	bpf_printk("Not found");
+			// 	continue;
+			// }
 	
-			unsigned long long cgroup_id_recv = blocked_file->cgroup_id;
-			if(cgroup_id_recv == 0){
-				continue;
-			}
+			// unsigned long long cgroup_id_recv = blocked_file->cgroup_id;
+			// if(cgroup_id_recv == 0){
+			// 	continue;
+			// }
 	
-			if(cgroup_id_recv == cgroupid_curr){
-				const char *blocked_file_path = blocked_file->path;
+			// if(cgroup_id_recv == cgroupid_curr){
+			// 	const char *blocked_file_path = blocked_file->path;
 	
-				if (blocked_file_path == NULL){
-					bpf_printk("Blocked file path is NULL");
-					continue;
-				}
-				if (compare_file_names(cur_file, blocked_file_path)){
-					bpf_printk("BLOCKED");
-					ret = -EPERM;
-				}
-			}
-		}
+			// 	if (blocked_file_path == NULL){
+			// 		bpf_printk("Blocked file path is NULL");
+			// 		continue;
+			// 	}
+			// 	if (compare_file_names(cur_file, blocked_file_path)){
+			// 		bpf_printk("BLOCKED");
+			// 		ret = -EPERM;
+			// 	}
+			// }
+		// }
 	
 		struct process_info info = {};
 		info.pid = bpf_get_current_pid_tgid() >> 32;
@@ -257,7 +303,6 @@ int BPF_PROG(restrict_file_open, struct file *file)
 		// Send event to userspace for logging
 		bpf_perf_event_output(ctx, &file_access_events, BPF_F_CURRENT_CPU, &info, sizeof(info));
 	
-	}
 
 
 	return ret;

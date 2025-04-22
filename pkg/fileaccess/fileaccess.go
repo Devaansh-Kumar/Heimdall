@@ -11,6 +11,7 @@ import (
 	// "encoding/binary"
 	// "bytes"
 
+	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/perf"
 	// "golang.org/x/sys/unix"
@@ -24,7 +25,7 @@ func BlockFileOpen(ctx context.Context, wg *sync.WaitGroup, cgroupID uint64, fil
 
 	// Load the compiled eBPF ELF and load it into the kernel.
 	var objs fileaccessObjects
-	if err := loadFileaccessObjects(&objs, nil); err != nil {
+	if err := loadFileaccessObjects(&objs, &ebpf.CollectionOptions{Programs: ebpf.ProgramOptions{LogSizeStart: 4096 * 4096 * 255}}); err != nil {
 		log.Fatal("Loading eBPF objects: ", err)
 	}
 	defer objs.Close()
@@ -56,6 +57,7 @@ func BlockFileOpen(ctx context.Context, wg *sync.WaitGroup, cgroupID uint64, fil
 		val = fileaccessFilePath{}
 	}
 	
+	log.Println("Cgroup", cgroupID)
 
 	// Create new reader to read from perf buffer
 	rd, err := perf.NewReader(objs.FileAccessEvents, os.Getpagesize())
