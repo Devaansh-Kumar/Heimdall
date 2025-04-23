@@ -1,10 +1,10 @@
 # Paths and variables
-BPFOBJ = pkg/syscallfilter/syscallfilter_x86_bpfel.o
-BPFOBJ_GO = pkg/syscallfilter/syscallfilter_x86_bpfel.go
+BPFOBJ = pkg/syscallfilter/syscallfilter_x86_bpfel.o pkg/privilege/privilege_x86_bpfel.o pkg/fileaccess/fileaccess_x86_bpfel.o
+BPFOBJ_GO = pkg/syscallfilter/syscallfilter_x86_bpfel.go pkg/privilege/privilege_x86_bpfel.go pkg/fileaccess/fileaccess_x86_bpfel.go
 VMLINUX = vmlinux.h
 EBPF_DIR = src
 GO_CLI_DIR = .
-CLI_BINARY = syscall_blocker
+CLI_BINARY = heimdall
 
 # Default target
 all: vmlinux build-bpf-obj build-cli

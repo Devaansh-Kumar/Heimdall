@@ -1,6 +1,6 @@
 .vscode
 src/vmlinux.h
-syscall_blocker
 pkg/syscallfilter/syscallfilter_x86_bpfel*
 pkg/privilege/privilege_x86_bpfel*
 pkg/fileaccess/fileaccess_x86_bpfel*
+heimdall
