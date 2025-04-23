@@ -1,0 +1,16 @@
+# File: config.yaml
+
+# The long ID or name of the container you want to target
+container_id: "a42d5ccfb8cb20dcfbc575b2ce89c91a3c56a8e22306d397d9c1ec144e814fb5"
+
+# Which syscalls to block
+block_syscalls:
+  - "ptrace"
+
+# Whether to block privilege escalation attempts
+block_privilege_escalation: true
+
+# Any filesystem paths you also want to deny open on
+file_paths:
+  - "/etc/sh"
+  - "/var/log/secure"

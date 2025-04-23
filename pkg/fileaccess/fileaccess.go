@@ -2,7 +2,6 @@ package fileaccess
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"sync"
@@ -46,7 +45,6 @@ func BlockFileOpen(ctx context.Context, wg *sync.WaitGroup, cgroupID uint64, fil
 			// fmt.Printf("%c ", filePath[i][j])
 			val.Path[j] = int8(filePath[i][j])
 		}
-		fmt.Printf("\n")
 		val.CgroupId = cgroupID
 		err = objs.BlockedFiles.Put(int32(i), val)
 		if err != nil {
