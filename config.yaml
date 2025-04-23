@@ -12,5 +12,5 @@ block_privilege_escalation: true
 
 # Any filesystem paths you also want to deny open on
 file_paths:
-  - "/etc/sh"
-  - "/var/log/secure"
+  - "/tmp/xyz"
+  - "/tmp/abc"

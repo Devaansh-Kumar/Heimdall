@@ -4,12 +4,8 @@
 #include <linux/errno.h>
 
 #define BUF_SIZE 32768
-// #define MAX_COMBINED_LEN 512
 #define MAX_BUFS 2
 #define MAX_BLOCKED_FILES 10
-
-// #define DEBUG
-// #define HASH_COMP
 
 /* --- Important Structure Definitions --- */
 struct buffer
@@ -170,12 +166,13 @@ static __always_inline bool compare_file_names(const char *s1, const char *s2)
 	return my_substr(s1, s2);
 }
 
-struct cont {
+struct file_path_context {
 	long ret;
 	const char *cur_file;
+	long unsigned long cgroup_id;
 };
 
-static long callback_fn(struct bpf_map *map, const void *key, struct filePath* blocked_file, struct cont* ctx) {
+static long callback_fn(struct bpf_map *map, const void *key, struct filePath* blocked_file, struct file_path_context* ctx) {
 	
 	if (!blocked_file){
 		bpf_printk("Not found");
@@ -189,7 +186,7 @@ static long callback_fn(struct bpf_map *map, const void *key, struct filePath* b
 		return 0;
 	}
 	
-	unsigned long long cgroupid_curr = bpf_get_current_cgroup_id();
+	unsigned long long cgroupid_curr = ctx->cgroup_id;
 	
 	if(cgroup_id_recv == cgroupid_curr){
 		bpf_printk("cgroup: %lu\n", blocked_file->cgroup_id);
@@ -226,17 +223,17 @@ int BPF_PROG(restrict_file_open, struct file *file)
 	}
 
 	const char *cur_file = prepend_path(&path, buf);
+	long unsigned long cgroup_id = bpf_get_current_cgroup_id();
 
 	u32 index = 0;
 
 	struct filePath *blocked_file;
 
-	struct cont c = {
+	struct file_path_context c = {
 		.cur_file = cur_file,
+		.cgroup_id = cgroup_id,
 	};
 	bpf_for_each_map_elem(&blocked_files, callback_fn, &c, 0);
-
-	unsigned long long cgroup_id = bpf_get_current_cgroup_id();
 	
 	if (c.ret != 0){ 
 		ret = c.ret;
