@@ -4,9 +4,9 @@
 #include <linux/errno.h>
 
 #define BUF_SIZE 32768
-#define MAX_COMBINED_LEN 512
+// #define MAX_COMBINED_LEN 512
 #define MAX_BUFS 2
-#define MAX_BLOCKED_FILES 2
+#define MAX_BLOCKED_FILES 10
 
 // #define DEBUG
 // #define HASH_COMP
@@ -36,7 +36,7 @@ struct
 	__uint(type, BPF_MAP_TYPE_ARRAY);
 	__type(key, u32);
 	__type(value, struct filePath);
-	__uint(max_entries, 5);
+	__uint(max_entries, MAX_BLOCKED_FILES);
 } blocked_files SEC(".maps");
 
 struct
@@ -134,7 +134,6 @@ static __inline bool my_substr(const char *path, const char *prefix)
 
 #pragma unroll
 	for (i = 0; i < MAX_COMBINED_LEN; i++)
-	// bpf_for(i, 0, MAX_COMBINED_LEN)
 	{ // Cap at 256 to stay within BPF limits
 		char p = path[i];
 		char b = prefix[i];
@@ -170,32 +169,6 @@ static __always_inline bool compare_file_names(const char *s1, const char *s2)
 	
 	return my_substr(s1, s2);
 }
-
-// static __always_inline int check_file(const struct file *file)
-// {
-
-// 	u32 key = 0;
-// 	struct filePath *blocked_file = bpf_map_lookup_elem(&blocked_files, &key);
-
-	
-
-// 	unsigned long long cgroup_id_recv = blocked_file->cgroup_id;
-// 	unsigned long long cgroup_id = bpf_get_current_cgroup_id();
-
-// 	const char *blocked_file_path = blocked_file->path;
-	
-
-// 	if (cgroup_id_recv == cgroup_id)
-// 	{
-// 		if (compare_file_names(cur_file, blocked_file_path))
-// 		{
-// 			bpf_printk("BLOCKED");
-// 			return -EPERM;
-// 		}
-// 	}
-
-// 	return 0;
-// }
 
 struct cont {
 	long ret;
@@ -258,52 +231,27 @@ int BPF_PROG(restrict_file_open, struct file *file)
 
 	struct filePath *blocked_file;
 
-		// #pragma clang loop unroll(full)
-		// for(index = 0; index < MAX_BLOCKED_FILES; index++){
+	struct cont c = {
+		.cur_file = cur_file,
+	};
+	bpf_for_each_map_elem(&blocked_files, callback_fn, &c, 0);
 
-		struct cont c = {
-			.cur_file = cur_file,
-		};
-		bpf_for_each_map_elem(&blocked_files, callback_fn, &c, 0);
-		if (c.ret != 0) ret = c.ret;
+	unsigned long long cgroup_id = bpf_get_current_cgroup_id();
+	
+	if (c.ret != 0){ 
+		ret = c.ret;
 
-			// blocked_file = bpf_map_lookup_elem(&blocked_files, &index);
-	
-			// if (!blocked_file){
-			// 	bpf_printk("Not found");
-			// 	continue;
-			// }
-	
-			// unsigned long long cgroup_id_recv = blocked_file->cgroup_id;
-			// if(cgroup_id_recv == 0){
-			// 	continue;
-			// }
-	
-			// if(cgroup_id_recv == cgroupid_curr){
-			// 	const char *blocked_file_path = blocked_file->path;
-	
-			// 	if (blocked_file_path == NULL){
-			// 		bpf_printk("Blocked file path is NULL");
-			// 		continue;
-			// 	}
-			// 	if (compare_file_names(cur_file, blocked_file_path)){
-			// 		bpf_printk("BLOCKED");
-			// 		ret = -EPERM;
-			// 	}
-			// }
-		// }
-	
 		struct process_info info = {};
 		info.pid = bpf_get_current_pid_tgid() >> 32;
 		info.uid = (uid_t)bpf_get_current_uid_gid();
-		// info.file_path = cur_file;
-		// info.cgroup_id = cgroup_id;
+		bpf_probe_read_str(&info.file_path, sizeof(info.file_path), cur_file);
+		info.cgroup_id = cgroup_id;
 		bpf_get_current_comm(&info.comm, sizeof(info.comm));
-	
+
 		// Send event to userspace for logging
 		bpf_perf_event_output(ctx, &file_access_events, BPF_F_CURRENT_CPU, &info, sizeof(info));
 	
-
+	}
 
 	return ret;
 }

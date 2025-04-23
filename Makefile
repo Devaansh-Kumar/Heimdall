@@ -4,7 +4,7 @@ BPFOBJ_GO = pkg/syscallfilter/syscallfilter_x86_bpfel.go
 VMLINUX = vmlinux.h
 EBPF_DIR = src
 GO_CLI_DIR = .
-CLI_BINARY = syscall_blocker
+CLI_BINARY = heimdall
 
 # Default target
 all: vmlinux build-bpf-obj build-cli

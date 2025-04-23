@@ -7,14 +7,14 @@ import (
 	"os"
 	"sync"
 
-	// "errors"
-	// "encoding/binary"
-	// "bytes"
+	"errors"
+	"encoding/binary"
+	"bytes"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/perf"
-	// "golang.org/x/sys/unix"
+	"golang.org/x/sys/unix"
 )
 
 const LSM_BPF_HOOKPOINT = "file_open"
@@ -57,8 +57,6 @@ func BlockFileOpen(ctx context.Context, wg *sync.WaitGroup, cgroupID uint64, fil
 		val = fileaccessFilePath{}
 	}
 	
-	log.Println("Cgroup", cgroupID)
-
 	// Create new reader to read from perf buffer
 	rd, err := perf.NewReader(objs.FileAccessEvents, os.Getpagesize())
 	if err != nil {
@@ -67,30 +65,30 @@ func BlockFileOpen(ctx context.Context, wg *sync.WaitGroup, cgroupID uint64, fil
 	defer rd.Close()
 
 	// Outputting process details when system call is blocked
-	// go readPerfEvents(rd)
+	go readPerfEvents(rd)
 
 	<-ctx.Done()
 	log.Println("Shutting down  file access blocker...")
 }
 
-// func readPerfEvents(rd *perf.Reader) {
-// 	var event fileaccessProcessInfo
-// 	for {
-// 		record, err := rd.Read()
-// 		if err != nil {
-// 			if errors.Is(err, perf.ErrClosed) {
-// 				return
-// 			}
+func readPerfEvents(rd *perf.Reader) {
+	var event fileaccessProcessInfo
+	for {
+		record, err := rd.Read()
+		if err != nil {
+			if errors.Is(err, perf.ErrClosed) {
+				return
+			}
 
-// 			log.Fatal("error reading from perf", err)
-// 			continue
-// 		}
+			log.Fatal("error reading from perf", err)
+			continue
+		}
 
-// 		if err = binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event); err != nil {
-// 			log.Printf("parsing error: %s", err)
-// 			continue
-// 		}
+		if err = binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event); err != nil {
+			log.Printf("parsing error: %s", err)
+			continue
+		}
 
-// 		log.Printf("Blocked File Path. PID: %v, UID: %v, Command: %s", event.Pid, event.Uid, unix.ByteSliceToString(event.Comm[:]))
-// 	}
-// }
+		log.Printf("Blocked File Path. PID: %v, UID: %v, CgroupID: %v, File Path: %s, Command: %s", event.Pid, event.Uid,  event.CgroupId, event.FilePath, unix.ByteSliceToString(event.Comm[:]))
+	}
+}
