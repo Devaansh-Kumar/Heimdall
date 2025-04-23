@@ -7,8 +7,7 @@
 
 #define SIGKILL 9
 #define TASK_COMM_LEN 16
-#define MAX_COMBINED_LEN 256
-
+#define MAX_COMBINED_LEN 368
 
 struct process_info
 {

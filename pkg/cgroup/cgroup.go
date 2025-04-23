@@ -17,7 +17,7 @@ func GetCgroupID(containerID string) (uint64, error) {
 		log.Fatalf("error getting file info for %s: %s", cgroupPath, err)
 	}
 
-	stat, ok:= file.Sys().(*syscall.Stat_t)
+	stat, ok := file.Sys().(*syscall.Stat_t)
 	if !ok {
 		log.Fatalf("failed to get inode number for %s", cgroupPath)
 	}

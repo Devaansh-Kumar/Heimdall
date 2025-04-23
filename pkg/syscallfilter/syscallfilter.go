@@ -83,6 +83,6 @@ func readPerfEvents(rd *perf.Reader) {
 			continue
 		}
 
-		log.Printf("Killed process. PID: %v, UID: %v, CgroupID: %v, Syscall: %v, Command: %s", event.Pid, event.Uid, event.CgroupId, event.SyscallNr, unix.ByteSliceToString(event.Comm[:]))
+		log.Printf("Killed process trying to access blocked system call. PID: %v, UID: %v, CgroupID: %v, Syscall: %v, Command: %s", event.Pid, event.Uid, event.CgroupId, event.SyscallNr, unix.ByteSliceToString(event.Comm[:]))
 	}
 }

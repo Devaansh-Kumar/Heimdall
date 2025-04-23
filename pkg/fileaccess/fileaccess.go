@@ -6,20 +6,17 @@ import (
 	"os"
 	"sync"
 
-	"errors"
-	"encoding/binary"
 	"bytes"
+	"encoding/binary"
+	"errors"
 
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/perf"
 	"golang.org/x/sys/unix"
 )
 
-const LSM_BPF_HOOKPOINT = "file_open"
-
 func BlockFileOpen(ctx context.Context, wg *sync.WaitGroup, cgroupID uint64, filePath []string) {
 	defer wg.Done()
-
 
 	// Load the compiled eBPF ELF and load it into the kernel.
 	var objs fileaccessObjects
@@ -41,7 +38,6 @@ func BlockFileOpen(ctx context.Context, wg *sync.WaitGroup, cgroupID uint64, fil
 	entries := len(filePath)
 	for i := 0; i < entries; i++ {
 		for j := 0; j < len(filePath[i]); j++ {
-			// fmt.Printf("%c ", filePath[i][j])
 			val.Path[j] = int8(filePath[i][j])
 		}
 		val.CgroupId = cgroupID
@@ -53,7 +49,7 @@ func BlockFileOpen(ctx context.Context, wg *sync.WaitGroup, cgroupID uint64, fil
 		}
 		val = fileaccessFilePath{}
 	}
-	
+
 	// Create new reader to read from perf buffer
 	rd, err := perf.NewReader(objs.FileAccessEvents, os.Getpagesize())
 	if err != nil {
@@ -65,7 +61,7 @@ func BlockFileOpen(ctx context.Context, wg *sync.WaitGroup, cgroupID uint64, fil
 	go readPerfEvents(rd)
 
 	<-ctx.Done()
-	log.Println("Shutting down  file access blocker...")
+	log.Println("Shutting down file access blocker...")
 }
 
 func readPerfEvents(rd *perf.Reader) {
@@ -86,6 +82,6 @@ func readPerfEvents(rd *perf.Reader) {
 			continue
 		}
 
-		log.Printf("Blocked File Path. PID: %v, UID: %v, CgroupID: %v, File Path: %s, Command: %s", event.Pid, event.Uid,  event.CgroupId, event.FilePath, unix.ByteSliceToString(event.Comm[:]))
+		log.Printf("Blocked access to file path. PID: %v, UID: %v, CgroupID: %v, File Path: %s, Command: %s", event.Pid, event.Uid, event.CgroupId, event.FilePath, unix.ByteSliceToString(event.Comm[:]))
 	}
 }

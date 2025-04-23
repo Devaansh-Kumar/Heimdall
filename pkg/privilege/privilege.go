@@ -14,8 +14,6 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-const KPROBE_SYSCALL_HOOKPOINT = "x64_sys_call"
-
 func BlockPrivilegeEscalation(ctx context.Context, wg *sync.WaitGroup, cgroupID uint64) {
 	defer wg.Done()
 

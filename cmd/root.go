@@ -11,62 +11,61 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-
 	"github.com/Devaansh-Kumar/Heimdall/pkg/cgroup"
+	"github.com/Devaansh-Kumar/Heimdall/pkg/fileaccess"
 	"github.com/Devaansh-Kumar/Heimdall/pkg/privilege"
 	"github.com/Devaansh-Kumar/Heimdall/pkg/syscallfilter"
 	"github.com/Devaansh-Kumar/Heimdall/pkg/x64"
-	"github.com/Devaansh-Kumar/Heimdall/pkg/fileaccess"
 	"github.com/cilium/ebpf/rlimit"
 	"github.com/spf13/cobra"
 )
+
 type Config struct {
-    ContainerID           string   `yaml:"container_id"`
-    BlockSyscalls         []string `yaml:"block_syscalls"`
-    BlockPrivilegeEscal   bool     `yaml:"block_privilege_escalation"`
-    BlockFilePaths        []string `yaml:"file_paths"`
+	ContainerID         string   `yaml:"container_id"`
+	BlockSyscalls       []string `yaml:"block_syscalls"`
+	BlockPrivilegeEscal bool     `yaml:"block_privilege_escalation"`
+	BlockFilePaths      []string `yaml:"file_paths"`
 }
 
 // rootCmd represents the base command
 var rootCmd = &cobra.Command{
-	Use:   "syscall_blocker SYSTEM_CALL_NAME",
-	Short: "A CLI to block system calls using eBPF for containers",
-	Long:  `CLI to add syscall blocking rules via eBPF for containers.`,
+	Use:   "heimdall",
+	Short: "A CLI to add security to containers using eBPF",
+	Long:  `A CLI to restrict file system access, block system calls and prevent privilege escalation via eBPF for containers.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		flagContainerID, _ := cmd.Flags().GetString("container-id")
-        flagSyscalls, _ := cmd.Flags().GetStringSlice("block-syscalls")
-        flagPriv, _ := cmd.Flags().GetBool("block-privilege-escalation")
-        flagPaths, _ := cmd.Flags().GetStringSlice("file-path")
+		flagSyscalls, _ := cmd.Flags().GetStringSlice("block-syscalls")
+		flagPriv, _ := cmd.Flags().GetBool("block-privilege-escalation")
+		flagPaths, _ := cmd.Flags().GetStringSlice("file-path")
 		yamlPath, _ := cmd.Flags().GetString("yaml")
 
 		var cfg Config
-        if yamlPath != "" {
-            data, err := os.ReadFile(yamlPath)
-            if err != nil {
-                log.Fatalf("Failed to read YAML file %s: %v", yamlPath, err)
-            }
-            if err := yaml.Unmarshal(data, &cfg); err != nil {
-                log.Fatalf("Failed to parse YAML: %v", err)
-            }
-        }
+		if yamlPath != "" {
+			data, err := os.ReadFile(yamlPath)
+			if err != nil {
+				log.Fatalf("Failed to read YAML file %s: %v", yamlPath, err)
+			}
+			if err := yaml.Unmarshal(data, &cfg); err != nil {
+				log.Fatalf("Failed to parse YAML: %v", err)
+			}
+		}
 
 		containerID := cfg.ContainerID
-        if containerID == "" {
-            containerID = flagContainerID
-        }
-        syscalls := cfg.BlockSyscalls
-        if len(syscalls) == 0 {
-            syscalls = flagSyscalls
-        }
-        privEscalation := cfg.BlockPrivilegeEscal
-        if !privEscalation {
-            privEscalation = flagPriv
-        }
-        filePaths := cfg.BlockFilePaths
-        if len(filePaths) == 0 {
-            filePaths = flagPaths
-        }
-
+		if containerID == "" {
+			containerID = flagContainerID
+		}
+		syscalls := cfg.BlockSyscalls
+		if len(syscalls) == 0 {
+			syscalls = flagSyscalls
+		}
+		privEscalation := cfg.BlockPrivilegeEscal
+		if !privEscalation {
+			privEscalation = flagPriv
+		}
+		filePaths := cfg.BlockFilePaths
+		if len(filePaths) == 0 {
+			filePaths = flagPaths
+		}
 
 		// Get cgroup id from container name
 		cgroupID, err := cgroup.GetCgroupID(containerID)
@@ -139,7 +138,6 @@ func Execute() {
 	rootCmd.Flags().BoolP("block-privilege-escalation", "p", false, "Block Privilege Escalation attempts for the container")
 	rootCmd.Flags().StringSliceP("file-path", "f", []string{}, "File path to block")
 	rootCmd.Flags().StringP("yaml", "y", "", "Path to YAML config file with container_id, block_syscalls, block_privilege_escalation, file_paths")
-
 
 	// Remove resource limits for kernels <5.11.
 	if err := rlimit.RemoveMemlock(); err != nil {
