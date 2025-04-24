@@ -1,20 +1,20 @@
 # Paths and variables
 BPFOBJ = pkg/syscallfilter/syscallfilter_x86_bpfel.o pkg/privilege/privilege_x86_bpfel.o pkg/fileaccess/fileaccess_x86_bpfel.o
 BPFOBJ_GO = pkg/syscallfilter/syscallfilter_x86_bpfel.go pkg/privilege/privilege_x86_bpfel.go pkg/fileaccess/fileaccess_x86_bpfel.go
-VMLINUX = vmlinux.h
 EBPF_DIR = src
+VMLINUX = $(EBPF_DIR)/vmlinux.h
 GO_CLI_DIR = .
 CLI_BINARY = heimdall
 
 # Default target
-all: vmlinux build-bpf-obj build-cli
+all: $(VMLINUX) build-bpf-obj build-cli
 
 # Generate vmlinux.h using bpftool
-vmlinux:
-	bpftool btf dump file /sys/kernel/btf/vmlinux format c > $(EBPF_DIR)/$(VMLINUX)
+$(VMLINUX):
+	bpftool btf dump file /sys/kernel/btf/vmlinux format c > $(VMLINUX)
 
 # Compile eBPF program using "go generate"
-build-bpf-obj: vmlinux
+build-bpf-obj: $(VMLINUX)
 	go generate
 
 # Build the Go CLI userspace binary
@@ -35,7 +35,7 @@ lint:
 
 # Clean generated files
 clean:
-	rm -f $(EBPF_DIR)/$(VMLINUX) $(BPFOBJ) $(BPFOBJ_GO) $(CLI_BINARY)
+	rm -f $(VMLINUX) $(BPFOBJ) $(BPFOBJ_GO) $(CLI_BINARY)
 
 # Clean and rebuild everything
 rebuild: clean all
@@ -56,4 +56,4 @@ help:
 	@echo "  rebuild       Clean and build everything from scratch"
 	@echo "  help          Show this help message"
 
-.PHONY: all vmlinux build-bpf-obj build-cli fmt test lint clean rebuild help
+.PHONY: all build-bpf-obj build-cli fmt test lint clean rebuild help
