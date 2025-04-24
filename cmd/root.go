@@ -38,6 +38,7 @@ var rootCmd = &cobra.Command{
 		flagPriv, _ := cmd.Flags().GetBool("block-privilege-escalation")
 		flagPaths, _ := cmd.Flags().GetStringSlice("file-path")
 		yamlPath, _ := cmd.Flags().GetString("yaml")
+		dryRun, _ := cmd.Flags().GetBool("dry-run")
 
 		var cfg Config
 		if yamlPath != "" {
@@ -81,6 +82,11 @@ var rootCmd = &cobra.Command{
 				log.Fatalf("Failed to get syscall number: %s", err)
 			}
 			systemCallList = append(systemCallList, uint32(syscallNum))
+		}
+
+		if dryRun {
+			dryRunCmd(containerID, systemCallList, cgroupID, privEscalation, filePaths)
+			return
 		}
 
 		// For synchronizing program loading and unloading on exit
@@ -138,6 +144,7 @@ func Execute() {
 	rootCmd.Flags().BoolP("block-privilege-escalation", "p", false, "Block Privilege Escalation attempts for the container")
 	rootCmd.Flags().StringSliceP("file-path", "f", []string{}, "File path to block")
 	rootCmd.Flags().StringP("yaml", "y", "", "Path to YAML config file with container_id, block_syscalls, block_privilege_escalation, file_paths")
+	rootCmd.Flags().Bool("dry-run", false, "Enable dry-run mode to preview actions without applying filters")
 
 	// Remove resource limits for kernels <5.11.
 	if err := rlimit.RemoveMemlock(); err != nil {
@@ -148,4 +155,31 @@ func Execute() {
 		fmt.Println(err)
 		os.Exit(1)
 	}
+}
+
+func dryRunCmd(containerID string, syscalls []uint32, cgroupID uint64, privEscalation bool, filePaths []string) {
+	fmt.Printf("Dry run mode enabled. The following actions would be taken:\n\n")
+
+	if len(syscalls) > 0 {
+		for _, syscall := range syscalls {
+			syscallName, err := x64.GetSyscallName(int(syscall))
+			if err != nil {
+				fmt.Printf("Failed to get syscall name for number %d: %v\n", syscall, err)
+				continue
+			}
+			fmt.Printf("Block system call: %s (Number: %d)\n", syscallName, syscall)
+		}
+	}
+
+	if privEscalation {
+		fmt.Println("Block privilege escalation attempts")
+	}
+
+	if len(filePaths) > 0 {
+		fmt.Printf("Block file access for paths: %v\n", filePaths)
+	}
+
+	fmt.Println("\nNote: No changes will be made to the system.")
+	fmt.Printf("Container ID: %s\n", containerID)
+	fmt.Printf("Cgroup ID: %d\n", cgroupID)
 }
