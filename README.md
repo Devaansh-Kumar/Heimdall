@@ -18,9 +18,9 @@ make all
 ```
 
 
-This is will give an executable file called `syscall_blocker`
+This is will give an executable file called `heimdall`
 ```bash
-sudo ./syscall_blocker --help
+sudo ./heimdall --help
 ```
 
 
