@@ -34,10 +34,11 @@ func BlockFileOpen(ctx context.Context, wg *sync.WaitGroup, cgroupID uint64, fil
 	defer kp.Close()
 
 	// Create filter and put in map
-	var val fileaccessFilePath
 	entries := len(filePath)
-	for i := 0; i < entries; i++ {
-		for j := 0; j < len(filePath[i]); j++ {
+	for i := range entries {
+		val := fileaccessFilePath{}
+
+		for j := range len(filePath[i]) {
 			val.Path[j] = int8(filePath[i][j])
 		}
 		val.CgroupId = cgroupID
@@ -47,7 +48,6 @@ func BlockFileOpen(ctx context.Context, wg *sync.WaitGroup, cgroupID uint64, fil
 		} else {
 			log.Printf("Added %s to Blocked File Paths", filePath[i])
 		}
-		val = fileaccessFilePath{}
 	}
 
 	// Create new reader to read from perf buffer
