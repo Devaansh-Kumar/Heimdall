@@ -33,6 +33,14 @@ struct
 	__type(value, struct process_info);
 } syscall_events SEC(".maps");
 
+// Map to store process info struct
+struct
+{
+	__uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+	__type(key, u32);
+	__type(value, struct process_info);
+	__uint(max_entries, 1);
+} process_info_map SEC(".maps");
 
 SEC("kprobe/x64_sys_call")
 int sys_call_block(struct pt_regs *ctx)
@@ -74,15 +82,18 @@ int sys_call_block(struct pt_regs *ctx)
 		{
 			bpf_printk("Blocking syscall %u for PID %d with UID %u and CgroupID %llu\n", syscall_nr, pid, uid, cgroup_id);
 
-			struct process_info info = {};
-			info.pid = pid;
-			info.uid = uid;
-			info.syscall_nr = syscall_nr;
-			info.cgroup_id = cgroup_id;
-			bpf_get_current_comm(&info.comm, sizeof(info.comm));
+			const u32 key_zero = 0;
+			struct process_info *info = bpf_map_lookup_elem(&process_info_map, &key_zero);
+			if (info == NULL) return ret;
+			
+			info->pid = pid;
+			info->uid = uid;
+			info->syscall_nr = syscall_nr;
+			info->cgroup_id = cgroup_id;
+			bpf_get_current_comm(&info->comm, sizeof(info->comm));
 
 			// Send event to userspace for logging
-			bpf_perf_event_output(ctx, &syscall_events, BPF_F_CURRENT_CPU, &info, sizeof(info));
+			bpf_perf_event_output(ctx, &syscall_events, BPF_F_CURRENT_CPU, info, sizeof(*info));
 		}
 	}
 
