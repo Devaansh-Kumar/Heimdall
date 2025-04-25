@@ -50,6 +50,15 @@ struct
 	__type(value, struct process_info);
 } file_access_events SEC(".maps");
 
+// Map to store process info struct
+struct
+{
+	__uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+	__type(key, u32);
+	__type(value, struct process_info);
+	__uint(max_entries, 1);
+} process_info_map SEC(".maps");
+
 
 static __always_inline struct mount *real_mount(struct vfsmount *mnt)
 {
@@ -204,9 +213,9 @@ SEC("lsm/file_open")
 int BPF_PROG(restrict_file_open, struct file *file)
 {
 	int ret = 0;
-	u32 key = 0;
+	const u32 key_zero = 0;
 	
-	struct buffer *buf = bpf_map_lookup_elem(&buffers, &key);
+	struct buffer *buf = bpf_map_lookup_elem(&buffers, &key_zero);
 	if (buf == NULL)
 	{
 		bpf_printk("Not found");
@@ -230,16 +239,17 @@ int BPF_PROG(restrict_file_open, struct file *file)
 	// Block access if return value is not 0
 	if (file_ctx.ret != 0){ 
 		ret = file_ctx.ret;
+		struct process_info *info = bpf_map_lookup_elem(&process_info_map, &key_zero);
+		if (info == NULL) return ret;
 
-		struct process_info info = {};
-		info.pid = bpf_get_current_pid_tgid() >> 32;
-		info.uid = (uid_t)bpf_get_current_uid_gid();
-		bpf_probe_read_str(&info.file_path, sizeof(info.file_path), cur_file);
-		info.cgroup_id = cgroup_id;
-		bpf_get_current_comm(&info.comm, sizeof(info.comm));
+		info->pid = bpf_get_current_pid_tgid() >> 32;
+		info->uid = (uid_t)bpf_get_current_uid_gid();
+		bpf_probe_read_str(info->file_path, sizeof(info->file_path), cur_file);
+		info->cgroup_id = cgroup_id;
+		bpf_get_current_comm(&info->comm, sizeof(info->comm));
 
 		// Send event to userspace for logging
-		bpf_perf_event_output(ctx, &file_access_events, BPF_F_CURRENT_CPU, &info, sizeof(info));
+		bpf_perf_event_output(ctx, &file_access_events, BPF_F_CURRENT_CPU, info, sizeof(*info));
 	}
 
 	return ret;

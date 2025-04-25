@@ -39,6 +39,14 @@ struct
 	__type(value, struct process_info);
 } privilege_escalation_events SEC(".maps");
 
+// Map to store process info struct
+struct
+{
+	__uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+	__type(key, u32);
+	__type(value, struct process_info);
+	__uint(max_entries, 1);
+} process_info_map SEC(".maps");
 
 SEC("lsm/cred_prepare")
 int BPF_PROG(handle_cred_prepare, struct cred *new, const struct cred *old, gfp_t gfp, int ret)
@@ -75,15 +83,18 @@ int BPF_PROG(handle_cred_prepare, struct cred *new, const struct cred *old, gfp_
 
     struct filter_pad *rule = bpf_map_lookup_elem(&privilege_map, &key);
     if(rule) {
-        struct process_info info = {};
-        info.pid = bpf_get_current_pid_tgid() >> 32;
-        info.uid = (uid_t)bpf_get_current_uid_gid();
-        info.syscall_nr = syscall;
-        info.cgroup_id = cgroup_id;
-        bpf_get_current_comm(&info.comm, sizeof(info.comm));
+        const u32 key_zero = 0;
+        struct process_info *info = bpf_map_lookup_elem(&process_info_map, &key_zero);
+        if (info == NULL) return ret;
+
+        info->pid = bpf_get_current_pid_tgid() >> 32;
+        info->uid = (uid_t)bpf_get_current_uid_gid();
+        info->syscall_nr = syscall;
+        info->cgroup_id = cgroup_id;
+        bpf_get_current_comm(&info->comm, sizeof(info->comm));
 
         // Send event to userspace for logging
-        bpf_perf_event_output(ctx, &privilege_escalation_events, BPF_F_CURRENT_CPU, &info, sizeof(info));
+        bpf_perf_event_output(ctx, &privilege_escalation_events, BPF_F_CURRENT_CPU, info, sizeof(*info));
 
         return -EPERM;
     }
