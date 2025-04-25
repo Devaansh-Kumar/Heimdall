@@ -4,8 +4,7 @@
 #include <linux/errno.h>
 
 #define BUF_SIZE 32768
-#define MAX_BUFS 2
-#define MAX_BLOCKED_FILES 10
+#define MAX_BLOCKED_FILES 64
 
 /* --- Important Structure Definitions --- */
 struct buffer
@@ -31,7 +30,7 @@ struct
 	__uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
 	__type(key, u32);
 	__type(value, struct buffer);
-	__uint(max_entries, MAX_BUFS);
+	__uint(max_entries, 1);
 } buffers SEC(".maps");
 
 // Map to hold all block files
@@ -132,7 +131,7 @@ static __always_inline char *prepend_path(const struct path *path, struct buffer
 	{
 		offset = 0;
 	}
-	else if (offset >= MAX_COMBINED_LEN)
+	else if (offset > MAX_COMBINED_LEN)
 	{
 		offset = MAX_COMBINED_LEN;
 	}
@@ -141,7 +140,7 @@ static __always_inline char *prepend_path(const struct path *path, struct buffer
 
 static __always_inline bool my_substr(const char *path, const char *prefix)
 {
-#pragma unroll
+// #pragma unroll
 	for (int i = 0; i < MAX_COMBINED_LEN; i++)
 	{ 
 		// Cap at 256 to stay within BPF limits
@@ -172,39 +171,30 @@ static __always_inline bool my_substr(const char *path, const char *prefix)
 
 static __always_inline bool compare_file_names(const char *s1, const char *s2)
 {
-	if ((s1 == 0) ^ (s2 == 0))
+	if ((s1 == NULL) ^ (s2 == NULL))
 		return false;
-	else if (s1 == 0 && s2 == 0)
+	else if (s1 == NULL && s2 == NULL)
 		return true;
 	
 	return my_substr(s1, s2);
 }
 
-static long callback_fn(struct bpf_map *map, const void *key, struct filePath* blocked_file, struct file_path_context* ctx)
+static long callback_fn(struct bpf_map *_map, const void *_key,
+	const struct filePath* blocked_file, struct file_path_context* ctx)
 {
-	if (!blocked_file) {
-		bpf_printk("Not found");
-		return 0;
-	}
+	const char *blocked_file_path = blocked_file->path;
+	// Empty filename means end of list
+	if (blocked_file_path[0] == '\0')
+		return 1;
 	
 	u64 cgroup_id_recv = blocked_file->cgroup_id;
-	if(cgroup_id_recv == 0) {
-		return 0;
-	}
-	
 	u64 cgroupid_curr = ctx->cgroup_id;
 	
-	if(cgroup_id_recv == cgroupid_curr) {
-		const char *blocked_file_path = blocked_file->path;
-
-		if (blocked_file_path == NULL) {
-			bpf_printk("Blocked file path is NULL");
-			return 0;
-		}
-		if (compare_file_names(ctx->cur_file, blocked_file_path)) {
-			bpf_printk("BLOCKED");
-			ctx->ret = -EPERM;
-		}
+	if(cgroup_id_recv == cgroupid_curr
+		&& compare_file_names(ctx->cur_file, blocked_file_path)) {
+		bpf_printk("BLOCKED");
+		ctx->ret = -EPERM;
+		return 1;
 	}
 	return 0;
 }
@@ -225,7 +215,12 @@ int BPF_PROG(restrict_file_open, struct file *file)
 	// Construct the full path
 	struct path path = BPF_CORE_READ(file, f_path);
 	const char *cur_file = prepend_path(&path, buf);
+
+	// Skip if file_open was detected on the host and not a container
 	u64 cgroup_id = bpf_get_current_cgroup_id();
+	if (cgroup_id == 0) {
+		return 0;
+	}
 
 	struct file_path_context file_ctx = {
 		.cur_file = cur_file,
@@ -233,7 +228,6 @@ int BPF_PROG(restrict_file_open, struct file *file)
 	};
 
 	// Iterate over the blocked_files map to match current path
-	struct filePath *blocked_file;
 	bpf_for_each_map_elem(&blocked_files, callback_fn, &file_ctx, 0);
 	
 	// Block access if return value is not 0
