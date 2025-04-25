@@ -40,6 +40,11 @@ var rootCmd = &cobra.Command{
 		yamlPath, _ := cmd.Flags().GetString("yaml")
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
 
+		// Remove resource limits for kernels <5.11.
+		if err := rlimit.RemoveMemlock(); err != nil {
+			log.Fatal("Removing memlock:", err)
+		}
+
 		var cfg Config
 		if yamlPath != "" {
 			data, err := os.ReadFile(yamlPath)
@@ -145,11 +150,6 @@ func Execute() {
 	rootCmd.Flags().StringSliceP("file-path", "f", []string{}, "File path to block")
 	rootCmd.Flags().StringP("yaml", "y", "", "Path to YAML config file with container_id, block_syscalls, block_privilege_escalation, file_paths")
 	rootCmd.Flags().Bool("dry-run", false, "Enable dry-run mode to preview actions without applying filters")
-
-	// Remove resource limits for kernels <5.11.
-	if err := rlimit.RemoveMemlock(); err != nil {
-		log.Fatal("Removing memlock:", err)
-	}
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
