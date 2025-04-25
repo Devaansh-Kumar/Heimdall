@@ -39,6 +39,11 @@ var rootCmd = &cobra.Command{
 		flagPaths, _ := cmd.Flags().GetStringSlice("file-path")
 		yamlPath, _ := cmd.Flags().GetString("yaml")
 
+		// Remove resource limits for kernels <5.11.
+		if err := rlimit.RemoveMemlock(); err != nil {
+			log.Fatal("Removing memlock:", err)
+		}
+
 		var cfg Config
 		if yamlPath != "" {
 			data, err := os.ReadFile(yamlPath)
@@ -138,11 +143,6 @@ func Execute() {
 	rootCmd.Flags().BoolP("block-privilege-escalation", "p", false, "Block Privilege Escalation attempts for the container")
 	rootCmd.Flags().StringSliceP("file-path", "f", []string{}, "File path to block")
 	rootCmd.Flags().StringP("yaml", "y", "", "Path to YAML config file with container_id, block_syscalls, block_privilege_escalation, file_paths")
-
-	// Remove resource limits for kernels <5.11.
-	if err := rlimit.RemoveMemlock(); err != nil {
-		log.Fatal("Removing memlock:", err)
-	}
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
