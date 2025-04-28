@@ -6,8 +6,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"log"
-	"os"
 	"sync"
+	"unsafe"
 
 	"github.com/Devaansh-Kumar/Heimdall/pkg/x64"
 	"github.com/cilium/ebpf/link"
@@ -52,7 +52,7 @@ func BlockSystemCall(ctx context.Context, wg *sync.WaitGroup, sysCallList []uint
 	}
 
 	// Create new reader to read from perf buffer
-	rd, err := perf.NewReader(objs.SyscallEvents, os.Getpagesize())
+	rd, err := perf.NewReader(objs.SyscallEvents, int(10*unsafe.Sizeof(syscallfilterProcessInfo{})))
 	if err != nil {
 		log.Fatalf("creating perf event reader: %s", err)
 	}

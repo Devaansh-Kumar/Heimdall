@@ -3,8 +3,8 @@ package fileaccess
 import (
 	"context"
 	"log"
-	"os"
 	"sync"
+	"unsafe"
 
 	"bytes"
 	"encoding/binary"
@@ -51,7 +51,7 @@ func BlockFileOpen(ctx context.Context, wg *sync.WaitGroup, cgroupID uint64, fil
 	}
 
 	// Create new reader to read from perf buffer
-	rd, err := perf.NewReader(objs.FileAccessEvents, os.Getpagesize())
+	rd, err := perf.NewReader(objs.FileAccessEvents, int(10*unsafe.Sizeof(fileaccessProcessInfo{})))
 	if err != nil {
 		log.Fatalf("creating perf event reader: %s", err)
 	}
