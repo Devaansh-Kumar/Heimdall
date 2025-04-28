@@ -5,6 +5,7 @@
 
 #define BUF_SIZE 32768
 #define MAX_BLOCKED_FILES 64
+#define MAX_COMBINED_LEN 4096
 
 /* --- Important Structure Definitions --- */
 struct buffer
@@ -23,6 +24,17 @@ struct file_path_context {
 	const char *cur_file;
 	u64 cgroup_id;
 };
+
+struct process_info
+{
+	u32 pid;
+	u32 uid;
+	u32 syscall_nr;
+	u64 cgroup_id;
+	u8 comm[TASK_COMM_LEN];
+	u8 file_path[MAX_COMBINED_LEN];
+};
+
 
 /* --- BPF Map Definitions --- */
 struct

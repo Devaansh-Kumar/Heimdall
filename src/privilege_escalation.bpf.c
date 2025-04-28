@@ -22,6 +22,14 @@ struct filter_pad
     unsigned char pad;
 };
 
+struct process_info
+{
+	u32 pid;
+	u32 uid;
+	u32 syscall_nr;
+	u64 cgroup_id;
+	u8 comm[TASK_COMM_LEN];
+};
 
 
 /* --- BPF Map Definitions --- */
