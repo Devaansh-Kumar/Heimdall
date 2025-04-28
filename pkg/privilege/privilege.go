@@ -6,8 +6,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"log"
-	"os"
 	"sync"
+	"unsafe"
 
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/perf"
@@ -47,7 +47,7 @@ func BlockPrivilegeEscalation(ctx context.Context, wg *sync.WaitGroup, cgroupID 
 	}
 
 	// Create new reader to read from perf buffer
-	rd, err := perf.NewReader(objs.PrivilegeEscalationEvents, os.Getpagesize())
+	rd, err := perf.NewReader(objs.PrivilegeEscalationEvents, int(10*unsafe.Sizeof(privilegeProcessInfo{})))
 	if err != nil {
 		log.Fatalf("creating perf event reader: %s", err)
 	}
